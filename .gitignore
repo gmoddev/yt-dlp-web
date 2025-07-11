@@ -2,3 +2,6 @@
 /downloads
 package-lock.json
 update.js
+ffmpeg.exe
+ffplay.exe
+ffprobe.exe
