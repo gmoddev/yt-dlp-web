@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A simple yt-dlp YouTube downloader with support for MP3 and MP4.">
+  <meta name="author" content="Delinquent Studios">
+  <meta name="theme-color" content="#121212">
+  <meta http-equiv="Cache-Control" content="no-store" />
+  <meta name="robots" content="noindex, nofollow">
+  <title>yt-dlp Downloader</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬇️</text></svg>">
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #121212;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 60px;
+      text-align: center;
+    }
+
+    input[type="text"] {
+      padding: 10px;
+      width: 300px;
+      font-size: 1em;
+      border-radius: 6px;
+      border: none;
+    }
+
+    label {
+      display: block;
+      margin: 8px auto;
+    }
+
+    .format-buttons {
+      display: flex;
+      gap: 10px;
+      margin: 10px 0;
+      justify-content: center;
+    }
+
+    .format-button {
+      padding: 10px 20px;
+      border: 2px solid #00bfff;
+      background-color: transparent;
+      color: #00bfff;
+      cursor: pointer;
+      font-weight: bold;
+      border-radius: 6px;
+      transition: all 0.3s ease;
+    }
+
+    .format-button.active,
+    .format-button:hover {
+      background-color: #00bfff;
+      color: white;
+    }
+
+    button[type="submit"], #helpBtn {
+      background: #00bfff;
+      border: none;
+      padding: 10px 20px;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background 0.3s ease;
+      margin-top: 10px;
+    }
+
+    #helpBtn {
+      background: transparent;
+      color: #00bfff;
+      border: 2px solid #00bfff;
+    }
+
+    #helpBtn:hover {
+      background: #00bfff;
+      color: white;
+    }
+
+    button[type="submit"]:disabled {
+      background-color: #555;
+      cursor: not-allowed;
+    }
+
+    #errorBanner {
+      background-color: #ff4d4d;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    #statusMessage {
+      margin-top: 10px;
+      color: #00bfff;
+      display: none;
+    }
+
+    #helpModal {
+      display: none;
+      background: #1e1e1e;
+      color: #ccc;
+      padding: 15px;
+      max-height: 300px;
+      overflow-y: auto;
+      border-radius: 8px;
+      width: 80%;
+      margin-top: 20px;
+    }
+
+    input[type="checkbox"] {
+      transform: scale(1.2);
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="errorBanner" role="alert" aria-live="assertive"></div>
+  <h1>yt-dlp Downloader</h1>
+  <form id="downloadForm" aria-label="YouTube Downloader Form">
+    <label for="url">YouTube URL</label>
+    <input type="text" id="url" name="url" placeholder="Paste YouTube URL" required />
+
+    <fieldset class="format-buttons" aria-label="Select output format">
+      <legend class="sr-only">Choose format</legend>
+      <button type="button" class="format-button" data-format="mp3">MP3</button>
+      <button type="button" class="format-button" data-format="mp4">MP4</button>
+    </fieldset>
+    <input type="hidden" id="format" name="format" value="mp3" />
+
+    <label><input type="checkbox" name="writeThumbnail" /> Write Thumbnail</label>
+    <label><input type="checkbox" name="writeInfoJson" /> Write Info JSON</label>
+    <label><input type="checkbox" name="writeDescription" /> Write Description</label>
+    <label><input type="checkbox" name="embedMetadata" /> Embed Metadata</label>
+    <label><input type="checkbox" name="writeSubs" /> Write Subtitles</label>
+
+    <button type="submit" id="submitButton">Download</button>
+    <div id="statusMessage" aria-live="polite">⏳ Working...</div>
+  </form>
+
+  <button id="helpBtn" type="button">View yt-dlp Help</button>
+  <pre id="helpModal"></pre>
+
+  <script>
+    // i am not a good designer so website looks garbo
+
+    const form = document.getElementById("downloadForm");
+    const errorBanner = document.getElementById("errorBanner");
+    const formatButtons = document.querySelectorAll(".format-button");
+    const formatInput = document.getElementById("format");
+    const statusMessage = document.getElementById("statusMessage");
+    const submitButton = document.getElementById("submitButton");
+    const helpBtn = document.getElementById("helpBtn");
+    const helpModal = document.getElementById("helpModal");
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const cookies = document.cookie.split(';').reduce((acc, cookie) => {
+        const [key, val] = cookie.split("=").map(c => c.trim());
+        if (key && val) acc[key] = decodeURIComponent(val);
+        return acc;
+      }, {});
+
+      if (cookies.format) {
+        formatButtons.forEach(btn => {
+          btn.classList.remove("active");
+          if (btn.dataset.format === cookies.format) {
+            btn.classList.add("active");
+            formatInput.value = cookies.format;
+          }
+        });
+      }
+
+      form.querySelectorAll("input[type='checkbox']").forEach(checkbox => {
+        if (cookies[checkbox.name] === "true") checkbox.checked = true;
+      });
+    });
+
+    formatButtons.forEach(button => {
+      button.addEventListener("click", () => {
+        formatButtons.forEach(btn => btn.classList.remove("active"));
+        button.classList.add("active");
+        formatInput.value = button.getAttribute("data-format");
+        document.cookie = `format=${button.getAttribute("data-format")}; SameSite=Strict; path=/`;
+      });
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      lockForm(true);
+
+      const formData = new FormData(form);
+      const params = new URLSearchParams();
+      formData.forEach((value, key) => {
+        if (value === "on") value = "true";
+        params.append(key, value);
+        if (key !== "url") {
+          document.cookie = `${key}=${value}; SameSite=Strict; path=/`;
+        }
+      });
+
+      const response = await fetch("/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const disposition = response.headers.get("Content-Disposition");
+        const match = /filename="?([^\"]+)"?/.exec(disposition);
+        const filename = match ? match[1] : "downloaded_file";
+
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } else {
+        const error = await response.text();
+        showError(error || "Download failed.");
+      }
+
+      lockForm(false);
+    });
+
+    helpBtn.addEventListener("click", async () => {
+      const help = await fetch("/yt-dlp-help").then(r => r.text());
+      helpModal.textContent = help;
+      helpModal.style.display = helpModal.style.display === "none" ? "block" : "none";
+    });
+
+    function lockForm(lock) {
+      submitButton.disabled = lock;
+      statusMessage.style.display = lock ? "block" : "none";
+    }
+
+    function showError(message) {
+      errorBanner.textContent = message;
+      errorBanner.style.display = "block";
+      setTimeout(() => {
+        errorBanner.style.display = "none";
+      }, 5000);
+    }
+  </script>
+</body>
+</html>
